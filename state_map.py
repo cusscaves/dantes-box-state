@@ -4,61 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def file_hash(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def snapshot_files(root: Path) -> dict[str, str]:
-    out: dict[str, str] = {}
-    if not root.exists():
-        return out
-    for p in sorted(root.rglob("*")):
-        if not p.is_file():
-            continue
-        if ".git" in p.parts:
-            continue
-        rel = str(p.relative_to(root))
-        try:
-            out[rel] = file_hash(p)
-        except OSError:
-            continue
-    return out
-
-
-def snapshot_processes() -> list[str]:
-    try:
-        proc = subprocess.run(
-            ["ps", "-axo", "comm="], capture_output=True, text=True, check=False
-        )
-        names = sorted({line.strip() for line in proc.stdout.splitlines() if line.strip()})
-        return names
-    except OSError:
-        return []
-
-
-def make_snapshot(watch: Path) -> dict:
-    return {
-        "ts": utc_now(),
-        "watch": str(watch.resolve()),
-        "files": snapshot_files(watch),
-        "processes": snapshot_processes(),
-    }
+from dante_fs import diff_file_maps, make_snapshot
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
@@ -80,22 +30,18 @@ def cmd_diff(args: argparse.Namespace) -> int:
     a = json.loads(before_path.read_text())
     b = json.loads(after_path.read_text())
     fa, fb = a.get("files", {}), b.get("files", {})
-    # Loop2: optional --files-only ignores noisy process churn
+    files = diff_file_maps(fa, fb)
     if args.files_only:
-        pa, pb = set(), set()
+        report = {**files, "process_added": [], "process_removed": []}
     else:
         pa, pb = set(a.get("processes", [])), set(b.get("processes", []))
-
-    report = {
-        "created": sorted(set(fb) - set(fa)),
-        "deleted": sorted(set(fa) - set(fb)),
-        "changed": sorted(p for p in set(fa) & set(fb) if fa[p] != fb[p]),
-        "process_added": sorted(pb - pa),
-        "process_removed": sorted(pa - pb),
-    }
+        report = {
+            **files,
+            "process_added": sorted(pb - pa),
+            "process_removed": sorted(pa - pb),
+        }
     print(json.dumps(report, indent=2))
-    divergent = any(report[k] for k in report)
-    return 1 if divergent else 0
+    return 1 if any(report[k] for k in report) else 0
 
 
 def main(argv: list[str] | None = None) -> int:

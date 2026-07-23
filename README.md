@@ -29,3 +29,7 @@ python state_map.py diff before.json after.json
 ```bash
 python3 tests/test_state_map.py
 ```
+
+## Library
+
+`dante_fs.py` is the shared snapshot core. Workflow imports it from the sibling checkout under the umbrella (`~/Desktop/dantes-box/state`).
