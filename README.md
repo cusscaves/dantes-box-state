@@ -19,8 +19,13 @@ python state_map.py snapshot --out after.json
 python state_map.py diff before.json after.json
 ```
 
-## Success criteria
+## Success criteria (verified)
 
 1. Snapshot captures file hashes under a watch root + running process names
 2. Diff reports created / deleted / changed / process_added / process_removed
-3. Exit code 0 on empty diff, 1 on any divergence
+3. Exit code 0 on empty diff, 1 on any divergence, 2 on missing snapshot
+4. `--files-only` ignores process churn for stable CI
+
+```bash
+python3 tests/test_state_map.py
+```

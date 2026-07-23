@@ -35,14 +35,31 @@ def main() -> int:
         )
         assert r.returncode == 0, r.stderr
         r = subprocess.run(
-            [sys.executable, str(SM), "diff", str(before), str(after)],
+            [sys.executable, str(SM), "diff", str(before), str(after), "--files-only"],
             capture_output=True,
             text=True,
         )
-        assert r.returncode == 1
+        assert r.returncode == 1, r.stderr
         report = json.loads(r.stdout)
         assert "b.txt" in report["created"]
         assert "a.txt" in report["changed"]
+
+        # Loop2: identical snapshots → exit 0
+        r = subprocess.run(
+            [sys.executable, str(SM), "diff", str(after), str(after), "--files-only"],
+            capture_output=True,
+            text=True,
+        )
+        assert r.returncode == 0, r.stdout
+
+        # Loop2: missing file fails loud
+        r = subprocess.run(
+            [sys.executable, str(SM), "diff", "nope.json", str(after)],
+            capture_output=True,
+            text=True,
+        )
+        assert r.returncode == 2
+
         print("ALL TESTS PASSED")
         return 0
     finally:

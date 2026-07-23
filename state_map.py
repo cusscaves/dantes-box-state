@@ -70,10 +70,21 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
-    a = json.loads(Path(args.before).read_text())
-    b = json.loads(Path(args.after).read_text())
+    before_path, after_path = Path(args.before), Path(args.after)
+    if not before_path.exists():
+        print(f"missing before snapshot: {before_path}", file=sys.stderr)
+        return 2
+    if not after_path.exists():
+        print(f"missing after snapshot: {after_path}", file=sys.stderr)
+        return 2
+    a = json.loads(before_path.read_text())
+    b = json.loads(after_path.read_text())
     fa, fb = a.get("files", {}), b.get("files", {})
-    pa, pb = set(a.get("processes", [])), set(b.get("processes", []))
+    # Loop2: optional --files-only ignores noisy process churn
+    if args.files_only:
+        pa, pb = set(), set()
+    else:
+        pa, pb = set(a.get("processes", [])), set(b.get("processes", []))
 
     report = {
         "created": sorted(set(fb) - set(fa)),
@@ -99,6 +110,11 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("diff")
     s.add_argument("before")
     s.add_argument("after")
+    s.add_argument(
+        "--files-only",
+        action="store_true",
+        help="ignore process list (stable CI diffs)",
+    )
     s.set_defaults(func=cmd_diff)
 
     args = p.parse_args(argv)
